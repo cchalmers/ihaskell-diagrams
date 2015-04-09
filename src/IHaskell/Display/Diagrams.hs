@@ -5,6 +5,7 @@
 {-# LANGUAGE ConstraintKinds       #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE RankNTypes            #-}
+{-# LANGUAGE OverloadedStrings            #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module IHaskell.Display.Diagrams
   ( IHaskellBackend (..)
@@ -23,7 +24,7 @@ module IHaskell.Display.Diagrams
 import Diagrams.Prelude
 #ifdef FSVG
 import Diagrams.Backend.SVG
-import Text.Blaze.Svg.Renderer.String
+import Lucid.Svg
 #endif
 #ifdef FRASTERIFIC
 import Codec.Picture
@@ -68,9 +69,9 @@ instance SVGFloat n => IHaskellBackend SVG n where
 
 -- | Render diagram using given 'SizeSpec2D'.
 svgDiagram' :: SVGFloat n => SizeSpec V2 n -> QDiagram SVG V2 n Any -> DisplayData
-svgDiagram' szSpec dia = svg $ renderSvg rendered
+svgDiagram' szSpec dia = svg $ toListOf each rendered
   where
-    rendered = renderDia SVG (SVGOptions szSpec Nothing) dia
+    rendered = renderText $ renderDia SVG (SVGOptions szSpec [] "ihaskell-svg") dia
 
 -- | Rendering hint.
 svgDiagram :: Diagram SVG -> DisplayData
@@ -82,11 +83,12 @@ svgDiagram = svgDiagram' defaultSpec2D
 ------------------------------------------------------------------------
 
 #ifdef FRASTERIFIC
-instance IHaskellBackend Rasterific Float where
+instance TypeableFloat n => IHaskellBackend Rasterific n where
   displayDiagram' szSpec = display . rasterificDiagram' "png" 80 szSpec
 
 -- | Render diagram using given 'SizeSpec2D'. Only supports jpeg and png formats.
-rasterificDiagram' :: String -> Word8 -> SizeSpec V2 Float -> Diagram Rasterific -> DisplayData
+rasterificDiagram' :: TypeableFloat n
+                   => String -> Word8 -> SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
 rasterificDiagram' format q szSpec dia = encode img
   where
     encode | isAny ["jpg","jpeg"] = jpg w h . base64 . toStrict . encodeJpg
