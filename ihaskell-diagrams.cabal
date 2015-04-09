@@ -21,7 +21,7 @@ Flag svg
 
 Flag rasterific
   Description: Enable Rasterific backend
-  Default:     False
+  Default:     True
   Manual:      True
 
 library
