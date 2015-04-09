@@ -30,7 +30,6 @@ import Lucid.Svg
 #ifdef FRASTERIFIC
 import Codec.Picture
 import Codec.Picture.Types (dropTransparency, convertPixel)
-import Data.Char
 import Data.Word
 import Diagrams.Backend.Rasterific
 import Data.ByteString.Lazy (toStrict)

@@ -1,7 +1,6 @@
 ## ihaskell-diagrams
 
-[IHaskell] instances for [diagrams].
-
+[IHaskell] instances for [diagrams], along with some helper functions.
 
 The `svg` and `rasterific` backend is on by default. These are currently
 the only backends supported.
