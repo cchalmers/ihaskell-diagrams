@@ -51,6 +51,7 @@ diagram _ = displayDiagram
 diagram' :: IHaskellBackend b (N b) => b -> SizeSpec (V b) (N b) -> Diagram b -> IO Display
 diagram' _ = displayDiagram'
 
+-- | Class for backends that can be displayed in ihaskell.
 class Num (N b) => IHaskellBackend b n where
   displayDiagram :: (V b ~ V2, Num n) => QDiagram b V2 n Any -> IO Display
   displayDiagram = displayDiagram' defaultSize
@@ -68,13 +69,13 @@ instance (V b ~ V2, IHaskellBackend b n, Num n) => IHaskellDisplay (QDiagram b V
 instance SVGFloat n => IHaskellBackend SVG n where
   displayDiagram' szSpec = display . svgDiagram' szSpec
 
--- | Render diagram using given 'SizeSpec2D'.
+-- | Render a SVG diagram to svg 'DisplayData' using given 'SizeSpec'.
 svgDiagram' :: SVGFloat n => SizeSpec V2 n -> QDiagram SVG V2 n Any -> DisplayData
 svgDiagram' szSpec dia = svg $ toListOf each rendered
   where
     rendered = renderText $ renderDia SVG (SVGOptions szSpec [] "ihaskell-svg") dia
 
--- | Rendering hint.
+-- | Render a SVG diagram to svg 'DisplayData'.
 svgDiagram :: Diagram SVG -> DisplayData
 svgDiagram = svgDiagram' defaultSize
 #endif
@@ -87,18 +88,18 @@ svgDiagram = svgDiagram' defaultSize
 instance TypeableFloat n => IHaskellBackend Rasterific n where
   displayDiagram' szSpec = display . pngDiagram' szSpec
 
--- | Render diagram using given 'SizeSpec2D'. Only supports jpeg and png formats.
+-- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
 pngDiagram' :: TypeableFloat n
-                   => SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
+            => SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
 pngDiagram' szSpec dia = png w h . base64 . toStrict $ encodePng img
   where
     img   = renderDia Rasterific (RasterificOptions szSpec) dia
     (w,h) = (imageWidth img, imageHeight img)
 
--- | Render diagram using given 'SizeSpec2D' in jpg format with given
---   quality (between 0 and 100).
+-- | Render a Rasterific diagram using given jpg quality (between 0 and
+--   100) and 'SizeSpec' to jpg 'DisplayData'.
 jpgDiagram' :: TypeableFloat n
-                     => Word8 -> SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
+            => Word8 -> SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
 jpgDiagram' q szSpec dia = png w h . base64 . toStrict $ encodeJpg img
   where
     img   = renderDia Rasterific (RasterificOptions szSpec) dia
@@ -107,11 +108,11 @@ jpgDiagram' q szSpec dia = png w h . base64 . toStrict $ encodeJpg img
     --
     encodeJpg = encodeJpegAtQuality q' . pixelMap (convertPixel . dropTransparency)
 
--- | Rendering hint.
+-- | Render a Rasterific diagram to jpg 'DisplayData'.
 jpgDiagram :: Diagram Rasterific -> DisplayData
 jpgDiagram = jpgDiagram' 80 defaultSize
 
--- | Rendering hint.
+-- | Render a Rasterific diagram to png 'DisplayData'.
 pngDiagram :: Diagram Rasterific -> DisplayData
 pngDiagram = pngDiagram' defaultSize
 #endif
