@@ -17,7 +17,8 @@ module IHaskell.Display.Diagrams
 #endif
 #ifdef FRASTERIFIC
   , Rasterific (..)
-  , rasterificDiagram, rasterificDiagram'
+  , pngDiagram, pngDiagram'
+  , jpgDiagram, jpgDiagram'
 #endif
   ) where
 
@@ -39,8 +40,8 @@ import Data.ByteString.Lazy (toStrict)
 -- import GHC.Exts (Constraint)
 import IHaskell.Display
 
-defaultSpec2D :: Num n => SizeSpec V2 n
-defaultSpec2D = mkHeight 350
+defaultSize :: Num n => SizeSpec V2 n
+defaultSize = mkHeight 350
 
 -- | Display a diagram using the given backend token.
 diagram :: (InSpace V2 n b, IHaskellBackend b n) => b -> Diagram b -> IO Display
@@ -52,7 +53,7 @@ diagram' _ = displayDiagram'
 
 class Num (N b) => IHaskellBackend b n where
   displayDiagram :: (V b ~ V2, Num n) => QDiagram b V2 n Any -> IO Display
-  displayDiagram = displayDiagram' defaultSpec2D
+  displayDiagram = displayDiagram' defaultSize
 
   displayDiagram' :: SizeSpec (V b) n -> QDiagram b (V b) n Any -> IO Display
 
@@ -75,7 +76,7 @@ svgDiagram' szSpec dia = svg $ toListOf each rendered
 
 -- | Rendering hint.
 svgDiagram :: Diagram SVG -> DisplayData
-svgDiagram = svgDiagram' defaultSpec2D
+svgDiagram = svgDiagram' defaultSize
 #endif
 
 ------------------------------------------------------------------------
@@ -84,17 +85,22 @@ svgDiagram = svgDiagram' defaultSpec2D
 
 #ifdef FRASTERIFIC
 instance TypeableFloat n => IHaskellBackend Rasterific n where
-  displayDiagram' szSpec = display . rasterificDiagram' "png" 80 szSpec
+  displayDiagram' szSpec = display . pngDiagram' szSpec
 
 -- | Render diagram using given 'SizeSpec2D'. Only supports jpeg and png formats.
-rasterificDiagram' :: TypeableFloat n
-                   => String -> Word8 -> SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
-rasterificDiagram' format q szSpec dia = encode img
+pngDiagram' :: TypeableFloat n
+                   => SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
+pngDiagram' szSpec dia = png w h . base64 . toStrict $ encodePng img
   where
-    encode | isAny ["jpg","jpeg"] = jpg w h . base64 . toStrict . encodeJpg
-           | otherwise            = png w h . base64 . toStrict . encodePng
-    isAny = any (== map toLower format)
-    --
+    img   = renderDia Rasterific (RasterificOptions szSpec) dia
+    (w,h) = (imageWidth img, imageHeight img)
+
+-- | Render diagram using given 'SizeSpec2D' in jpg format with given
+--   quality (between 0 and 100).
+jpgDiagram' :: TypeableFloat n
+                     => Word8 -> SizeSpec V2 n -> QDiagram Rasterific V2 n Any -> DisplayData
+jpgDiagram' q szSpec dia = png w h . base64 . toStrict $ encodeJpg img
+  where
     img   = renderDia Rasterific (RasterificOptions szSpec) dia
     (w,h) = (imageWidth img, imageHeight img)
     q'    = min 100 q
@@ -102,7 +108,11 @@ rasterificDiagram' format q szSpec dia = encode img
     encodeJpg = encodeJpegAtQuality q' . pixelMap (convertPixel . dropTransparency)
 
 -- | Rendering hint.
-rasterificDiagram :: Diagram Rasterific -> DisplayData
-rasterificDiagram = rasterificDiagram' "png" 80 (mkHeight 350)
+jpgDiagram :: Diagram Rasterific -> DisplayData
+jpgDiagram = jpgDiagram' 80 defaultSize
+
+-- | Rendering hint.
+pngDiagram :: Diagram Rasterific -> DisplayData
+pngDiagram = pngDiagram' defaultSize
 #endif
 
