@@ -10,17 +10,21 @@
 module IHaskell.Display.Diagrams
   ( IHaskellBackend (..)
   , diagram, diagram'
+  , getDefSize, setDefSize
   , module Diagrams.Prelude
 #ifdef FSVG
+  -- * SVG helpers
   , SVG (..)
   , svgDiagram, svgDiagram'
 #endif
 #ifdef FRASTERIFIC
+  -- * Rasterific helpers
   , Rasterific (..)
   , pngDiagram, pngDiagram'
   , jpgDiagram, jpgDiagram'
 #endif
 #ifdef FCAIRO
+  -- * Cairo helpers
   , Cairo (..)
   , svgCDiagram, svgCDiagram'
   , pngCDiagram, pngCDiagram'
@@ -28,6 +32,8 @@ module IHaskell.Display.Diagrams
   ) where
 
 import Diagrams.Prelude
+import Data.IORef
+import System.IO.Unsafe
 #ifdef FSVG
 import Diagrams.Backend.SVG as SVG
 import Lucid.Svg
@@ -46,8 +52,19 @@ import Data.ByteString.Char8 as B (readFile, unpack)
 
 import IHaskell.Display
 
-defaultSize :: Num n => SizeSpec V2 n
-defaultSize = mkHeight 350
+-- This is a reference to the default size that can be changed.
+defaultSize :: IORef (SizeSpec V2 Int)
+defaultSize = unsafePerformIO $ newIORef (mkHeight 350)
+{-# NOINLINE defaultSize #-}
+
+-- | Get the current default size for rendering an ihaskell diagram.
+getDefSize :: Num n => IO (SizeSpec V2 n)
+getDefSize = readIORef defaultSize <&> fmap fromIntegral
+
+-- | Set the default size for ihaskell diagrams. This will only hold for
+--   the current ihaskell session. The default size is @'mkHeight' 350@.
+setDefSize :: SizeSpec V2 Int -> IO ()
+setDefSize = writeIORef defaultSize
 
 -- | Display a diagram using the given backend token.
 diagram :: (InSpace V2 n b, IHaskellBackend b n) => b -> Diagram b -> IO Display
@@ -60,7 +77,7 @@ diagram' _ = displayDiagram'
 -- | Class for backends that can be displayed in ihaskell.
 class Num (N b) => IHaskellBackend b n where
   displayDiagram :: (V b ~ V2, Num n) => QDiagram b V2 n Any -> IO Display
-  displayDiagram = displayDiagram' defaultSize
+  displayDiagram d = getDefSize >>= \sz -> displayDiagram' sz d
 
   displayDiagram' :: SizeSpec (V b) n -> QDiagram b (V b) n Any -> IO Display
 
@@ -82,8 +99,8 @@ svgDiagram' szSpec dia = svg $ toListOf each rendered
     rendered = renderText $ renderDia SVG.SVG (SVGOptions szSpec [] "ihaskell-svg") dia
 
 -- | Render a SVG diagram to svg 'DisplayData'.
-svgDiagram :: Diagram SVG -> DisplayData
-svgDiagram = svgDiagram' defaultSize
+svgDiagram :: Diagram SVG -> IO DisplayData
+svgDiagram d = getDefSize <&> \sz -> svgDiagram' sz d
 #endif
 
 ------------------------------------------------------------------------
@@ -115,12 +132,12 @@ jpgDiagram' q szSpec dia = png w h . base64 . toStrict $ encodeJpg img
     encodeJpg = encodeJpegAtQuality q' . pixelMap (convertPixel . dropTransparency)
 
 -- | Render a Rasterific diagram to jpg 'DisplayData'.
-jpgDiagram :: Diagram Rasterific -> DisplayData
-jpgDiagram = jpgDiagram' 80 defaultSize
+jpgDiagram :: Diagram Rasterific -> IO DisplayData
+jpgDiagram d = getDefSize <&> \sz -> jpgDiagram' 80 sz d
 
 -- | Render a Rasterific diagram to png 'DisplayData'.
-pngDiagram :: Diagram Rasterific -> DisplayData
-pngDiagram = pngDiagram' defaultSize
+pngDiagram :: Diagram Rasterific -> IO DisplayData
+pngDiagram d = getDefSize <&> \sz -> pngDiagram' sz d
 #endif
 
 ------------------------------------------------------------------------
@@ -128,6 +145,7 @@ pngDiagram = pngDiagram' defaultSize
 ------------------------------------------------------------------------
 
 #ifdef FCAIRO
+-- | Renders Cairo SVGs.
 instance (n ~ Double) => IHaskellBackend Cairo n where
   displayDiagram' szSpec = display . svgCDiagram' szSpec
 
@@ -160,9 +178,10 @@ svgCDiagram' = cairoData Cairo.SVG
 
 -- | Render a Cairo diagram to png 'DisplayData'.
 pngCDiagram :: Diagram Cairo -> IO DisplayData
-pngCDiagram = pngCDiagram' defaultSize
+pngCDiagram d = getDefSize >>= \sz -> pngCDiagram' sz d
+
 
 svgCDiagram :: Diagram Cairo -> IO DisplayData
-svgCDiagram = svgCDiagram' defaultSize
+svgCDiagram d = getDefSize >>= \sz -> svgCDiagram' sz d
 #endif
 
