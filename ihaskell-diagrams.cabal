@@ -24,6 +24,11 @@ Flag rasterific
   Default:     True
   Manual:      True
 
+Flag html5
+  Description: Enable Html5 backend
+  Default:     False
+  Manual:      True
+
 Flag cairo
   Description: Enable Cairo backend
   Default:     False
@@ -32,10 +37,12 @@ Flag cairo
 library
   exposed-modules:     IHaskell.Display.Diagrams
   build-depends:
-    base         >= 4.6 && < 4.9,
-    ihaskell     >= 0.6 && < 0.7,
-    diagrams-lib >= 1.3 && < 1.4,
-    bytestring
+    base           >= 4.6 && < 4.9,
+    ihaskell       >= 0.6 && < 0.7,
+    ipython-kernel >= 0.6 && < 0.7,
+    diagrams-lib   >= 1.3 && < 1.4,
+    bytestring,
+    text
 
   if flag(svg)
       build-depends:
@@ -48,6 +55,10 @@ library
       build-depends: diagrams-rasterific >= 1.3 && < 1.4,
                      JuicyPixels
       CPP-options: -DFRASTERIFIC
+
+  if flag(html5)
+      build-depends: diagrams-html5 < 0.2
+      CPP-options: -DFHTML5
 
   if flag(cairo)
       build-depends: diagrams-cairo >= 1.3 && < 1.4,

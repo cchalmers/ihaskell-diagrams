@@ -23,6 +23,11 @@ module IHaskell.Display.Diagrams
   , pngDiagram, pngDiagram'
   , jpgDiagram, jpgDiagram'
 #endif
+#ifdef FHTML5
+  -- * Cairo helpers
+  , Html5 (..)
+  , canvasDiagram, canvasDiagram'
+#endif
 #ifdef FCAIRO
   -- * Cairo helpers
   , Cairo (..)
@@ -34,6 +39,9 @@ module IHaskell.Display.Diagrams
 import Diagrams.Prelude
 import Data.IORef
 import System.IO.Unsafe
+import Data.Text (Text)
+import Data.Unique
+import IHaskell.IPython.Types (DisplayData (..), MimeType (MimeSvg, MimeHtml))
 #ifdef FSVG
 import Diagrams.Backend.SVG as SVG
 import Lucid.Svg
@@ -45,6 +53,10 @@ import Data.Word
 import Diagrams.Backend.Rasterific
 import Data.ByteString.Lazy (toStrict)
 #endif
+#ifdef FHTML5
+import Diagrams.Backend.Html5 as Html5
+import Data.Text.Lazy.Builder
+#endif
 #ifdef FCAIRO
 import Diagrams.Backend.Cairo as Cairo
 import Data.ByteString.Char8 as B (readFile, unpack)
@@ -52,7 +64,7 @@ import Data.ByteString.Char8 as B (readFile, unpack)
 
 import IHaskell.Display
 
--- This is a reference to the default size that can be changed.
+-- This is a reference to the default size, which can be changed.
 defaultSize :: IORef (SizeSpec V2 Int)
 defaultSize = unsafePerformIO $ newIORef (mkHeight 350)
 {-# NOINLINE defaultSize #-}
@@ -65,6 +77,20 @@ getDefSize = readIORef defaultSize <&> fmap fromIntegral
 --   the current ihaskell session. The default size is @'mkHeight' 350@.
 setDefSize :: SizeSpec V2 Int -> IO ()
 setDefSize = writeIORef defaultSize
+
+-- | Certain backends need a unique
+unique :: IO Int
+unique = hashUnique <$> newUnique
+
+-- | Convert svg 'Text' to 'DisplayData'. (This is what 'svg' should
+--   probably be.)
+svg' :: Text -> DisplayData
+svg' = DisplayData MimeSvg
+
+-- | Convert svg 'Text' to 'DisplayData'. (This is what 'html' should
+--   probably be.)
+html' :: Text -> DisplayData
+html' = DisplayData MimeHtml
 
 -- | Display a diagram using the given backend token.
 diagram :: (InSpace V2 n b, IHaskellBackend b n) => b -> Diagram b -> IO Display
@@ -94,7 +120,7 @@ instance SVGFloat n => IHaskellBackend SVG n where
 
 -- | Render a SVG diagram to svg 'DisplayData' using given 'SizeSpec'.
 svgDiagram' :: SVGFloat n => SizeSpec V2 n -> QDiagram SVG V2 n Any -> DisplayData
-svgDiagram' szSpec dia = svg $ toListOf each rendered
+svgDiagram' szSpec dia = svg' (view strict rendered)
   where
     rendered = renderText $ renderDia SVG.SVG (SVGOptions szSpec [] "ihaskell-svg") dia
 
@@ -106,6 +132,8 @@ svgDiagram d = getDefSize <&> \sz -> svgDiagram' sz d
 ------------------------------------------------------------------------
 -- Rasterific
 ------------------------------------------------------------------------
+
+-- TODO: support 2x for high res displays
 
 #ifdef FRASTERIFIC
 instance TypeableFloat n => IHaskellBackend Rasterific n where
@@ -138,6 +166,29 @@ jpgDiagram d = getDefSize <&> \sz -> jpgDiagram' 80 sz d
 -- | Render a Rasterific diagram to png 'DisplayData'.
 pngDiagram :: Diagram Rasterific -> IO DisplayData
 pngDiagram d = getDefSize <&> \sz -> pngDiagram' sz d
+#endif
+
+------------------------------------------------------------------------
+-- HTML5
+------------------------------------------------------------------------
+
+-- TODO: support 2x for high res displays
+
+#ifdef FHTML5
+-- | Renders Cairo SVGs.
+instance (n ~ Double) => IHaskellBackend Html5 n where
+  displayDiagram' szSpec = display . canvasDiagram' szSpec
+
+-- | Render a Html5 diagram using given 'SizeSpec' to jpg 'DisplayData'.
+canvasDiagram' :: SizeSpec V2 Double -> Diagram Html5 -> IO DisplayData
+canvasDiagram' szSpec dia = unique <&> html' . view strict . rendered
+  where
+    rendered i = toLazyText $ renderDia Html5 (Html5Options szSpec False nm) dia
+      where nm = "id" ++ show i
+
+-- | Render a Html5 diagram using the default 'SizeSpec' from 'getDefSize'.
+canvasDiagram :: Diagram Html5 -> IO DisplayData
+canvasDiagram d = getDefSize >>= \sz -> canvasDiagram' sz d
 #endif
 
 ------------------------------------------------------------------------
@@ -179,7 +230,6 @@ svgCDiagram' = cairoData Cairo.SVG
 -- | Render a Cairo diagram to png 'DisplayData'.
 pngCDiagram :: Diagram Cairo -> IO DisplayData
 pngCDiagram d = getDefSize >>= \sz -> pngCDiagram' sz d
-
 
 svgCDiagram :: Diagram Cairo -> IO DisplayData
 svgCDiagram d = getDefSize >>= \sz -> svgCDiagram' sz d
