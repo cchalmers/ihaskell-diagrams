@@ -20,11 +20,16 @@ module IHaskell.Display.Diagrams
   , pngDiagram, pngDiagram'
   , jpgDiagram, jpgDiagram'
 #endif
+#ifdef FCAIRO
+  , Cairo (..)
+  , svgCDiagram, svgCDiagram'
+  , pngCDiagram, pngCDiagram'
+#endif
   ) where
 
 import Diagrams.Prelude
 #ifdef FSVG
-import Diagrams.Backend.SVG
+import Diagrams.Backend.SVG as SVG
 import Lucid.Svg
 #endif
 #ifdef FRASTERIFIC
@@ -34,9 +39,11 @@ import Data.Word
 import Diagrams.Backend.Rasterific
 import Data.ByteString.Lazy (toStrict)
 #endif
+#ifdef FCAIRO
+import Diagrams.Backend.Cairo as Cairo
+import Data.ByteString.Char8 as B (readFile, unpack)
+#endif
 
--- import Data.Typeable
--- import GHC.Exts (Constraint)
 import IHaskell.Display
 
 defaultSize :: Num n => SizeSpec V2 n
@@ -72,7 +79,7 @@ instance SVGFloat n => IHaskellBackend SVG n where
 svgDiagram' :: SVGFloat n => SizeSpec V2 n -> QDiagram SVG V2 n Any -> DisplayData
 svgDiagram' szSpec dia = svg $ toListOf each rendered
   where
-    rendered = renderText $ renderDia SVG (SVGOptions szSpec [] "ihaskell-svg") dia
+    rendered = renderText $ renderDia SVG.SVG (SVGOptions szSpec [] "ihaskell-svg") dia
 
 -- | Render a SVG diagram to svg 'DisplayData'.
 svgDiagram :: Diagram SVG -> DisplayData
@@ -114,5 +121,48 @@ jpgDiagram = jpgDiagram' 80 defaultSize
 -- | Render a Rasterific diagram to png 'DisplayData'.
 pngDiagram :: Diagram Rasterific -> DisplayData
 pngDiagram = pngDiagram' defaultSize
+#endif
+
+------------------------------------------------------------------------
+-- Cairo
+------------------------------------------------------------------------
+
+#ifdef FCAIRO
+instance (n ~ Double) => IHaskellBackend Cairo n where
+  displayDiagram' szSpec = display . svgCDiagram' szSpec
+
+cairoData :: OutputType -> SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
+cairoData format sz d = do
+  let filename = "diagram." ++ extension format
+      V2 w h = fst $ sizeAdjustment sz (boundingBox d)
+
+  switchToTmpDir
+
+  -- Cairo doesn't appear to have an easy way to retrive the raw data
+  -- without writing to file.
+  renderCairo filename sz d
+  imgData <- B.readFile filename
+  return $ case format of
+    PNG -> png (floor w) (floor h) $ base64 imgData
+    _   -> svg $ unpack imgData
+  where
+    extension Cairo.SVG = "svg"
+    extension Cairo.PNG = "png"
+    extension _         = error "cairoData: unsupported format for DisplayData"
+
+-- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
+pngCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
+pngCDiagram' = cairoData PNG
+
+-- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
+svgCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
+svgCDiagram' = cairoData Cairo.SVG
+
+-- | Render a Cairo diagram to png 'DisplayData'.
+pngCDiagram :: Diagram Cairo -> IO DisplayData
+pngCDiagram = pngCDiagram' defaultSize
+
+svgCDiagram :: Diagram Cairo -> IO DisplayData
+svgCDiagram = svgCDiagram' defaultSize
 #endif
 
