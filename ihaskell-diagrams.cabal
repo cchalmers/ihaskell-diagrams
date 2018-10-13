@@ -16,12 +16,12 @@ cabal-version:       >=1.16
 
 Flag svg
   Description: Enable SVG backend
-  Default:     True
+  Default:     False
   Manual:      True
 
 Flag rasterific
   Description: Enable Rasterific backend
-  Default:     True
+  Default:     False
   Manual:      True
 
 Flag html5
@@ -37,10 +37,12 @@ Flag cairo
 library
   exposed-modules:     IHaskell.Display.Diagrams
   build-depends:
-    base           >= 4.6 && < 4.9,
-    ihaskell       >= 0.6 && < 0.7,
-    ipython-kernel >= 0.6 && < 0.7,
-    diagrams-lib   >= 1.3 && < 1.4,
+    base,
+    ihaskell,
+    diagrams-svg,
+    svg-builder,
+    diagrams,
+    plots,
     bytestring,
     text
 

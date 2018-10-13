@@ -6,11 +6,12 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE RankNTypes            #-}
 {-# LANGUAGE OverloadedStrings            #-}
+{-# LANGUAGE TypeApplications            #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module IHaskell.Display.Diagrams
-  ( IHaskellBackend (..)
-  , diagram, diagram'
-  , getDefSize, setDefSize
+  -- ( IHaskellBackend (..)
+    -- diagram, diagram'
+  ( getDefSize, setDefSize
   , module Diagrams.Prelude
 #ifdef FSVG
   -- * SVG helpers
@@ -36,16 +37,21 @@ module IHaskell.Display.Diagrams
 #endif
   ) where
 
+import Plots hiding (display)
+
 import Diagrams.Prelude
 import Data.IORef
 import System.IO.Unsafe
 import Data.Text (Text)
 import Data.Unique
-import IHaskell.IPython.Types (DisplayData (..), MimeType (MimeSvg, MimeHtml))
-#ifdef FSVG
+import IHaskell.Types (DisplayData (..), MimeType (MimeSvg, MimeHtml))
+
+-- #ifdef FSVG
 import Diagrams.Backend.SVG as SVG
-import Lucid.Svg
-#endif
+-- import Lucid.Svg
+import Graphics.Svg
+-- #endif
+
 #ifdef FRASTERIFIC
 import Codec.Picture
 import Codec.Picture.Types (dropTransparency, convertPixel)
@@ -85,7 +91,7 @@ unique = hashUnique <$> newUnique
 -- | Convert svg 'Text' to 'DisplayData'. (This is what 'svg' should
 --   probably be.)
 svg' :: Text -> DisplayData
-svg' = DisplayData MimeSvg
+svg' = DisplayData MimeHtml
 
 -- | Convert svg 'Text' to 'DisplayData'. (This is what 'html' should
 --   probably be.)
@@ -93,40 +99,45 @@ html' :: Text -> DisplayData
 html' = DisplayData MimeHtml
 
 -- | Display a diagram using the given backend token.
-diagram :: (InSpace V2 n b, IHaskellBackend b n) => b -> Diagram b -> IO Display
-diagram _ = displayDiagram
+-- diagram :: (InSpace V2 n b, IHaskellBackend b n) => b -> Diagram b -> IO Display
+-- diagram _ = displayDiagram
 
 -- | Display a diagram using the given backend token and 'SizeSpec'.
-diagram' :: IHaskellBackend b (N b) => b -> SizeSpec (V b) (N b) -> Diagram b -> IO Display
-diagram' _ = displayDiagram'
+-- diagram' :: IHaskellBackend b (N b) => b -> SizeSpec (V b) (N b) -> Diagram b -> IO Display
+-- diagram' _ = displayDiagram'
 
 -- | Class for backends that can be displayed in ihaskell.
-class Num (N b) => IHaskellBackend b n where
-  displayDiagram :: (V b ~ V2, Num n) => QDiagram b V2 n Any -> IO Display
-  displayDiagram d = getDefSize >>= \sz -> displayDiagram' sz d
+-- class Num (N b) => IHaskellBackend b n where
+--   displayDiagram :: (V b ~ V2, Num n) => QDiagram b V2 n Any -> IO Display
+--   displayDiagram d = getDefSize >>= \sz -> displayDiagram' sz d
 
-  displayDiagram' :: SizeSpec (V b) n -> QDiagram b (V b) n Any -> IO Display
+  -- displayDiagram' :: SizeSpec (V b) n -> QDiagram b (V b) n Any -> IO Display
 
-instance (V b ~ V2, IHaskellBackend b n, Num n) => IHaskellDisplay (QDiagram b V2 n Any) where
-  display = displayDiagram
+instance (v ~ V2, n ~ Double, m ~ Any) => IHaskellDisplay (QDiagram v n m) where
+  display d = Display . pure <$> svgDiagram d
+
+instance IHaskellDisplay (Axis V2) where
+  display = display . renderAxis
 
 ------------------------------------------------------------------------
 -- SVG
 ------------------------------------------------------------------------
 
+-- | Render a SVG diagram to svg 'DisplayData' using given 'SizeSpec'.
+svgDiagram' :: SizeSpec V2 Int -> Diagram V2 -> DisplayData
+svgDiagram' szSpec dia = svg' (view strict rendered)
+  where
+    rendered = renderText . view _3 $ renderDiaT opts dia
+    opts = mkOptions @SVG szSpec
+
+svgDiagram :: Diagram V2 -> IO DisplayData
+svgDiagram d = getDefSize <&> \sz -> svgDiagram' sz d
+
 #ifdef FSVG
 instance SVGFloat n => IHaskellBackend SVG n where
   displayDiagram' szSpec = display . svgDiagram' szSpec
 
--- | Render a SVG diagram to svg 'DisplayData' using given 'SizeSpec'.
-svgDiagram' :: SVGFloat n => SizeSpec V2 n -> QDiagram SVG V2 n Any -> DisplayData
-svgDiagram' szSpec dia = svg' (view strict rendered)
-  where
-    rendered = renderText $ renderDia SVG.SVG (SVGOptions szSpec [] "ihaskell-svg") dia
-
 -- | Render a SVG diagram to svg 'DisplayData'.
-svgDiagram :: Diagram SVG -> IO DisplayData
-svgDiagram d = getDefSize <&> \sz -> svgDiagram' sz d
 #endif
 
 ------------------------------------------------------------------------
