@@ -46,6 +46,9 @@ import Data.Text (Text)
 import Data.Unique
 import IHaskell.Types (DisplayData (..), MimeType (MimeSvg, MimeHtml))
 
+import Data.ByteString.Lazy
+import Codec.Picture
+
 -- #ifdef FSVG
 import Diagrams.Backend.SVG as SVG
 -- import Lucid.Svg
@@ -63,10 +66,10 @@ import Data.ByteString.Lazy (toStrict)
 import Diagrams.Backend.Html5 as Html5
 import Data.Text.Lazy.Builder
 #endif
-#ifdef FCAIRO
-import Diagrams.Backend.Cairo as Cairo
-import Data.ByteString.Char8 as B (readFile, unpack)
-#endif
+-- #ifdef FCAIRO
+import qualified Diagrams.Backend.Cairo as Cairo
+import qualified Data.ByteString.Char8 as B (readFile, unpack)
+-- #endif
 
 import IHaskell.Display
 
@@ -114,7 +117,8 @@ html' = DisplayData MimeHtml
   -- displayDiagram' :: SizeSpec (V b) n -> QDiagram b (V b) n Any -> IO Display
 
 instance (v ~ V2, n ~ Double, m ~ Any) => IHaskellDisplay (QDiagram v n m) where
-  display d = Display . pure <$> svgDiagram d
+  -- display d = Display . pure <$> svgDiagram d
+  display d = Display . pure <$> (getDefSize >>= \sz -> cairoPng sz d)
 
 instance IHaskellDisplay (Axis V2) where
   display = display . renderAxis
@@ -206,43 +210,52 @@ canvasDiagram d = getDefSize >>= \sz -> canvasDiagram' sz d
 -- Cairo
 ------------------------------------------------------------------------
 
-#ifdef FCAIRO
+-- #ifdef FCAIRO
 -- | Renders Cairo SVGs.
-instance (n ~ Double) => IHaskellBackend Cairo n where
-  displayDiagram' szSpec = display . svgCDiagram' szSpec
+-- instance (n ~ Double) => IHaskellBackend Cairo n where
+--   displayDiagram' szSpec = display . svgCDiagram' szSpec
 
-cairoData :: OutputType -> SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
-cairoData format sz d = do
-  let filename = "diagram." ++ extension format
-      V2 w h = fst $ sizeAdjustment sz (boundingBox d)
+cairoPng :: SizeSpec V2 Double -> Diagram V2 -> IO DisplayData
+cairoPng sz dia = do
+  img <- Cairo.rasterDia (fmap ceiling sz) dia
+  let w = imageWidth img
+      h = imageHeight img
+  pure . png w h . base64 . toStrict $ encodePng img
+  -- where
+  -- let filename = "diagram.png"
+  --     -- V2 w h = fst $ sizeAdjustment sz (boundingBox d)
 
-  switchToTmpDir
+  -- saveDiagram
+  -- switchToTmpDir
 
-  -- Cairo doesn't appear to have an easy way to retrive the raw data
-  -- without writing to file.
-  renderCairo filename sz d
-  imgData <- B.readFile filename
-  return $ case format of
-    PNG -> png (floor w) (floor h) $ base64 imgData
-    _   -> svg $ unpack imgData
-  where
-    extension Cairo.SVG = "svg"
-    extension Cairo.PNG = "png"
-    extension _         = error "cairoData: unsupported format for DisplayData"
+  -- -- Cairo doesn't appear to have an easy way to retrive the raw data
+  -- -- without writing to file.
+  -- renderCairo filename sz d
+  -- imgData <- B.readFile filename
+  -- return $ case format of
+  --   PNG -> png (floor w) (floor h) $ base64 imgData
+  --   _   -> svg $ unpack imgData
+-- --   where
+-- --     extension Cairo.SVG = "svgo
+-- --     extension Cairo.PNG = "png"
+-- --     extension _         = error "cairoData: unsupported format for DisplayData"
 
--- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
-pngCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
-pngCDiagram' = cairoData PNG
+-- pngCDiagram :: Diagram Cairo -> IO DisplayData
+-- pngCDiagram = getDefSize <&> cairoData PNG
 
--- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
-svgCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
-svgCDiagram' = cairoData Cairo.SVG
+-- -- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
+-- pngCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
+-- pngCDiagram' = cairoData PNG
 
--- | Render a Cairo diagram to png 'DisplayData'.
-pngCDiagram :: Diagram Cairo -> IO DisplayData
-pngCDiagram d = getDefSize >>= \sz -> pngCDiagram' sz d
+-- -- | Render a Rasterific diagram using given 'SizeSpec' to jpg 'DisplayData'.
+-- svgCDiagram' :: SizeSpec V2 Double -> Diagram Cairo -> IO DisplayData
+-- svgCDiagram' = cairoData Cairo.SVG
 
-svgCDiagram :: Diagram Cairo -> IO DisplayData
-svgCDiagram d = getDefSize >>= \sz -> svgCDiagram' sz d
-#endif
+-- -- | Render a Cairo diagram to png 'DisplayData'.
+-- pngCDiagram :: Diagram Cairo -> IO DisplayData
+-- pngCDiagram d = getDefSize >>= \sz -> pngCDiagram' sz d
+
+-- svgCDiagram :: Diagram Cairo -> IO DisplayData
+-- svgCDiagram d = getDefSize >>= \sz -> svgCDiagram' sz d
+-- -- #endif
 

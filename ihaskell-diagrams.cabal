@@ -43,6 +43,8 @@ library
     svg-builder,
     diagrams,
     plots,
+    JuicyPixels,
+    diagrams-cairo,
     bytestring,
     text
 
